@@ -23,14 +23,4 @@ export const {
       clientSecret: GITHUB_CLIENT_SECRET,
     }),
   ],
-  callbacks: {
-    // Usually not needed, here we are fixing a bug in nextauth
-    async session({ session, user }: any) {
-      if (session && user) {
-        session.user.id = user.id;
-      }
-
-      return session;
-    },
-  },
 });
