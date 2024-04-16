@@ -1,6 +1,12 @@
 'use server';
 
+import { db } from '@/db';
+import { revalidatePath } from 'next/cache';
+import { Topic } from '@prisma/client';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { auth } from '@/auth';
+import paths from '@/paths';
 
 const createTopicSchema = z.object({
   name: z
@@ -12,7 +18,18 @@ const createTopicSchema = z.object({
   description: z.string().min(10),
 });
 
-export async function createTopic(formData: FormData) {
+interface CreateTopicFormState {
+  errors: {
+    name?: string[];
+    description?: string[];
+    _form?: string[];
+  };
+}
+
+export async function createTopic(
+  formState: CreateTopicFormState,
+  formData: FormData
+): Promise<CreateTopicFormState> {
   const result = createTopicSchema.safeParse({
     name: formData.get('name'),
     description: formData.get('description'),
@@ -20,9 +37,45 @@ export async function createTopic(formData: FormData) {
 
   if (!result.success) {
     console.log(result.error.flatten().fieldErrors);
+
+    return {
+      errors: result.error.flatten().fieldErrors,
+    };
+  }
+  const sussion = await auth();
+
+  if (!sussion || !sussion.user) {
+    return {
+      errors: {
+        _form: ['You must be signed in to do this'],
+      },
+    };
   }
 
-  return 10;
+  let topic: Topic | null = null;
+  try {
+    topic = await db.topic.create({
+      data: {
+        slug: result.data.name,
+        description: result.data.description,
+      },
+    });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      return {
+        errors: {
+          _form: [err.message],
+        },
+      };
+    } else {
+      return {
+        errors: {
+          _form: ['Something went wrong'],
+        },
+      };
+    }
+  }
 
-  // TODO: revalidate the homepage
+  revalidatePath('/');
+  redirect(paths.topicShow(topic.slug));
 }
